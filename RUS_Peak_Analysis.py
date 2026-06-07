@@ -78,7 +78,7 @@ def read_raw_files(file_contents):
     """Parse all files once; return raw temps, freqs, mag/imag/real lists."""
     temperatures, mag_vals, imag_vals, real_vals, frequencies = [], [], [], [], []
     for content in file_contents:
-        lines = content.decode("utf-8", errors="ignore").splitlines()
+        lines = content.decode("utf-8").splitlines()
         temp = None
         for line in lines:
             if "Temperature" in line:
@@ -236,11 +236,7 @@ def run_waterfall_pipeline(file_contents, file_names, data_type, bad_temps,
     return {"temperatures": nt, "frequencies": nf, "magnitudes": norm}
 
 # ── Run pipelines ─────────────────────────────────────────────────────────────
-file_contents = []
-for f in uploaded_files:
-    f.seek(0)
-    file_contents.append(f.read())
-file_contents = tuple(file_contents)
+file_contents = tuple(f.read() for f in uploaded_files)
 file_names    = tuple(f.name for f in uploaded_files)
 
 with st.spinner("Processing… (only re-runs when parameters change)"):
