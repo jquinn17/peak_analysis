@@ -26,6 +26,7 @@ with st.sidebar:
     st.subheader("Frequency range (kHz)")
     min_freq = st.number_input("Min freq", value=290.0, step=1.0)
     max_freq = st.number_input("Max freq", value=400.0, step=1.0)
+    factor = st.number_input("Factor", value=1000.0, step=10.0)
 
     st.subheader("Temperature range (K)")
     min_temp = st.number_input("Min temp", value=80.0, step=1.0)
@@ -34,12 +35,6 @@ with st.sidebar:
 
     st.subheader("Peak detection")
     prominence = st.slider("Prominence", 0.001, 0.5, 0.055, step=0.001, format="%.3f")
-
-    st.subheader("Normalization")
-    use_normalize = st.checkbox("Normalize data", value=False)
-    factor = st.number_input("Factor", value=1000.0, step=10.0)
-    peak_multiplier = st.number_input("Peak multiplier", value=1.5, step=0.1, format="%.2f")
-    power = st.number_input("Power", value=3.0, step=0.5, format="%.1f")
 
     st.subheader("Smoothing (Signal & Peaks)")
     smooth_order = st.slider("Poly fit order", 1, 8, 3)
@@ -55,7 +50,7 @@ with st.sidebar:
     wf_power = st.number_input("WF Power", value=1.0, step=0.5, format="%.1f")
     wf_peak_multiplier = st.number_input("WF Peak multiplier", value=1.0, step=0.1, format="%.2f")
     wf_smooth_order = st.slider("WF Poly fit order", 1, 8, 3, key="wf_ord")
-    wf_smooth_window = st.slider("WF Fit window", 3, 101, 21, step=2, key="wf_win")
+    wf_smooth_window = st.slider("WF Window length", 3, 101, 21, step=2, key="wf_win")
     wf_color_scheme = st.selectbox("WF Color scheme", [
         "Blue → Cyan",
         "Cyan → Blue",
@@ -70,7 +65,7 @@ with st.sidebar:
     ])
 
 # ── File upload ───────────────────────────────────────────────────────────────
-st.title("Peak Analysis")
+st.title("MSU RUS Peak Analysis")
 uploaded_files = st.file_uploader("Upload .dat files", type=["dat"], accept_multiple_files=True)
 
 if not uploaded_files:
@@ -115,7 +110,7 @@ def read_raw_files(file_contents):
 @st.cache_data(show_spinner=False)
 def run_pipeline(file_contents, file_names, data_type, bad_temps,
                  min_freq, max_freq, min_temp, max_temp, temp_interval,
-                 prominence, use_normalize, factor, peak_multiplier, power,
+                 prominence, factor,
                  smooth_order, smooth_window):
     from concurrent.futures import ThreadPoolExecutor
 
@@ -157,11 +152,7 @@ def run_pipeline(file_contents, file_names, data_type, bad_temps,
         arr = np.array(m)
         if len(arr) >= smooth_window:
             arr = savgol_filter(arr, window_length=smooth_window, polyorder=smooth_order)
-        if use_normalize and len(arr):
-            v = arr ** power
-            mx = np.max(np.abs(v))
-            if mx > 0:
-                arr = (v / mx) * peak_multiplier
+
         ids, _ = find_peaks(arr, prominence=prominence)
         return i, arr.tolist(), [ff[j] for j in ids], [arr[j] for j in ids]
 
@@ -173,20 +164,9 @@ def run_pipeline(file_contents, file_names, data_type, bad_temps,
 
     with ThreadPoolExecutor() as ex:
         for i, arr, pf, pm in ex.map(process_one, [(i, vals_out[i], freqs_out[i]) for i in range(n)]):
-            if use_normalize and not arr:
-                valid_mask[i] = False
-            else:
-                smoothed[i]   = arr
-                peak_freqs[i] = pf
-                peak_mags[i]  = pm
-
-    if use_normalize:
-        idx_keep = [i for i in range(n) if valid_mask[i]]
-        temps      = [temps[i]      for i in idx_keep]
-        freqs_out  = [freqs_out[i]  for i in idx_keep]
-        smoothed   = [smoothed[i]   for i in idx_keep]
-        peak_freqs = [peak_freqs[i] for i in idx_keep]
-        peak_mags  = [peak_mags[i]  for i in idx_keep]
+            smoothed[i]   = arr
+            peak_freqs[i] = pf
+            peak_mags[i]  = pm
 
     return {"temperatures": temps, "frequencies": freqs_out, "magnitudes": smoothed,
             "peak_frequencies": peak_freqs, "peak_magnitudes": peak_mags}
@@ -263,7 +243,7 @@ with st.spinner("Processing… (only re-runs when parameters change)"):
     result = run_pipeline(
         file_contents, file_names, data_type, bad_temps,
         min_freq, max_freq, min_temp, max_temp, temp_interval,
-        prominence, use_normalize, factor, peak_multiplier, power,
+        prominence, factor,
         smooth_order, smooth_window
     )
     wf_result = run_waterfall_pipeline(
