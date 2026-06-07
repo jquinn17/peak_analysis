@@ -78,7 +78,7 @@ def read_raw_files(file_contents):
     """Parse all files once; return raw temps, freqs, mag/imag/real lists."""
     temperatures, mag_vals, imag_vals, real_vals, frequencies = [], [], [], [], []
     for content in file_contents:
-        lines = content.decode("utf-8").splitlines()
+        lines = content.decode("utf-8", errors="ignore").splitlines()
         temp = None
         for line in lines:
             if "Temperature" in line:
